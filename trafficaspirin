@@ -1,0 +1,86 @@
+from flask import Flask, requests, jsonify
+import pymongo as py #give access to MongoDB
+import tomtom_sdk as tt
+import time
+import folium
+
+app = Flask(name)
+@app.route("/weather", methods=['GET'])
+def weather_route():
+    weather_data = weather()
+    return jsonify(weather_data)
+
+@app.route("/rush_hour", methods=['GET'])
+def rush_hour_route():
+    speed = get_rush_hour()
+    return jsonify({'speed': speed})
+
+@app.route("/map_data", methods=['GET'])
+def map_data_route():
+    map_data = get_data()
+    return jsonify(map_data)
+#API keys for weather - OpenWeatherMAp
+def weather():
+    API_KEY = '3QB9AA4RQPULCBA4BHCZT9FJ3'
+    city = "Montreal"
+    weather_url = f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/Montreal?unitGroup=metric&key=3QB9AA4RQPULCBA4BHCZT9FJ3&contentType=json"
+    #make the API request to the endpoint:
+    response = requests.get(weather_url)
+    try:
+        if response.status_code == 200:
+            weather_data = response.json()
+            precipitation = weather_data['precipitation'] #extract the precipitation info
+            for hour, hour_data in precipitation.items():
+                #check if it is raining or snowing
+                    if hour_data['value'] >0 : #there is preciptation
+                        if hour_data['unit'] == "cm":
+                            precipitation_type = "snowing"
+                        else:
+                            precipitation_type = "raining"
+                        print(f'At{hour}, it is {precipitation_type}. Be Careful. ')
+                        with open(weather_data.txt, "a") as weather_data_file: #store the ppt data in a file
+                            weather_data_file.write(f'{hour},{precipitation_type}\n' )
+        #error handling
+        else:    # If the status code is not 200, there was an error with the API request
+                print(f'Error: API request failed with status code {response.status_code}')
+    except requests.exceptions.RequestException as e:
+        # If there was an error with the requests library, print the error message
+        print(f'Error: {e}, error with the requests library')
+#Traffic info from TomTom:
+def get_rush_hour(): #getting the traffic flow
+    API_KEY = "id80uV4zJS1VIWJ4nvUdntyxi3vcSbQA"
+    url =  f"https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/xml?key=%7BAPI_KEY%7D&point=52.41072,4.84239"
+    client = tt.Client(API_KEY)
+    coords = "45.50,-73.57" #latitude and longitude coords for MTL
+    refresh_rate = 60
+    rush_hour_threshold = 30 #km/h
+
+    while True:
+        traffic_response = client.traffic.flow_segment_data(
+        point = coords,
+        unit = "KMPH"
+      )
+        speed = traffic_response["flowSegmentData"][0]["averageSpeed"]
+        if speed < rush_hour_threshold:
+            print("It's rush hour! Current average speed is {} km/h.".format(speed))
+        else:
+            print("Chillax, take your time. Current average speed is {} km/h.".format(speed))
+        time.sleep(refresh_rate) #refreash every 60s
+def get_data():
+    API_KEY = "id80uV4zJS1VIWJ4nvUdntyxi3vcSbQA"
+    url =  f"https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/xml?key=%7BAPI_KEY%7D&point=52.41072,4.84239"
+    location = "45.50,-73.57" 
+    response = requests.get(url.format(location,API_KEY))
+    map_data =  response.json()
+    return map_data
+
+def map_display():
+   while True:
+    API_KEY = "id80uV4zJS1VIWJ4nvUdntyxi3vcSbQA"
+    url =  f"https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/xml?key=%7BAPI_KEY%7D&point=52.41072,4.84239"
+    LOCATION = "45.50,-73.57" 
+    map_data = get_data()
+    map =  folium.Map(location=LOCATION.split(","), zoom_start =13) 
+    folium.Marker(location=LOCATION.split(",")).add_to(map)
+    map.save("traffic_map.html")
+    time.sleep(180) #refreash each 3 mins
